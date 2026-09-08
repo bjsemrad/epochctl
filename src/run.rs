@@ -153,41 +153,6 @@ fn launcher(ctx: &Context, action: LauncherAction) -> Result<()> {
                 println!("{}", if open { "open" } else { "closed" });
             });
         }
-        LauncherAction::Providers => {
-            let reply = ctx.call("launcher", "providers", &[])?;
-            let Some(reply) = reply else { return Ok(()) };
-            let value = reply.as_value();
-            ctx.format.emit(&value, || {
-                let empty = Vec::new();
-                let providers = value
-                    .get("providers")
-                    .and_then(Value::as_array)
-                    .unwrap_or(&empty);
-                if providers.is_empty() {
-                    println!("no providers reported");
-                    return;
-                }
-                for provider in providers {
-                    let name = provider.get("name").and_then(Value::as_str).unwrap_or("");
-                    let prefixes = provider
-                        .get("prefixes")
-                        .and_then(Value::as_array)
-                        .map(|items| {
-                            items
-                                .iter()
-                                .filter_map(Value::as_str)
-                                .collect::<Vec<_>>()
-                                .join(" ")
-                        })
-                        .unwrap_or_default();
-                    let pretty = provider
-                        .get("name_pretty")
-                        .and_then(Value::as_str)
-                        .unwrap_or(name);
-                    println!("{} {} {pretty}", pad(name, 14), pad(&prefixes, 4));
-                }
-            });
-        }
     }
     Ok(())
 }
@@ -292,6 +257,7 @@ fn shell(ctx: &Context, action: ShellAction) -> Result<()> {
                 show("config", "config_dir");
                 show("screens", "screens");
                 show("panels", "panels");
+                show("providers", "providers");
                 show("backend", "backend_connected");
                 show("launched", "launch_time");
             });

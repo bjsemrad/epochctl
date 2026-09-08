@@ -168,16 +168,84 @@ pub fn run(ctx: &Context) -> Result<()> {
     }
 
     let socket = ctx.config.socket.clone();
+    let mut backend_providers: Option<Vec<String>> = None;
     match crate::oxide::Client::connect(&socket) {
         Ok(mut client) => match client.providers() {
-            Ok(providers) => checks.push(Check::new(
-                "epochoxide",
-                Level::Ok,
-                format!("{} providers at {}", providers.len(), socket.display()),
-            )),
+            Ok(providers) => {
+                checks.push(Check::new(
+                    "epochoxide",
+                    Level::Ok,
+                    format!("{} providers at {}", providers.len(), socket.display()),
+                ));
+                backend_providers = Some(
+                    providers
+                        .into_iter()
+                        .map(|provider| provider.name)
+                        .collect(),
+                );
+            }
             Err(err) => checks.push(Check::new("epochoxide", Level::Warn, err.to_string())),
         },
         Err(err) => checks.push(Check::new("epochoxide", Level::Fail, err.to_string())),
+    }
+
+    // The shell keeps its own copy of the provider list, refreshed when it reconnects. If that has
+    // drifted from what the backend reports, the launcher is showing a stale set -- usually
+    // because EpochOxide restarted after the shell did, or the two are on different sockets.
+    if let (Some(backend), true) = (
+        backend_providers.as_ref(),
+        targets.iter().any(|target| target == "shell"),
+    ) {
+        match shell_providers(ctx) {
+            // A shell that does not report providers is simply older than the check.
+            Ok(None) => {}
+            Ok(Some(shell)) => {
+                let missing: Vec<&String> = backend
+                    .iter()
+                    .filter(|name| !shell.contains(name))
+                    .collect();
+                let extra: Vec<&String> = shell
+                    .iter()
+                    .filter(|name| !backend.contains(name))
+                    .collect();
+                if missing.is_empty() && extra.is_empty() {
+                    checks.push(Check::new(
+                        "provider sync",
+                        Level::Ok,
+                        format!("shell and backend agree on {} providers", backend.len()),
+                    ));
+                } else {
+                    let mut detail = format!(
+                        "shell sees {} providers, backend has {}",
+                        shell.len(),
+                        backend.len()
+                    );
+                    if !missing.is_empty() {
+                        detail.push_str(&format!(
+                            "; shell is missing {}",
+                            missing
+                                .iter()
+                                .map(|name| name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
+                    }
+                    if !extra.is_empty() {
+                        detail.push_str(&format!(
+                            "; shell still lists {}",
+                            extra
+                                .iter()
+                                .map(|name| name.as_str())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
+                    }
+                    detail.push_str(" (try `epochctl reload`)");
+                    checks.push(Check::new("provider sync", Level::Warn, detail));
+                }
+            }
+            Err(err) => checks.push(Check::new("provider sync", Level::Warn, err.to_string())),
+        }
     }
 
     let worst = checks
@@ -222,4 +290,23 @@ pub fn run(ctx: &Context) -> Result<()> {
         }
     });
     Ok(())
+}
+
+/// The provider names the running shell currently has, as reported by its `shell` IPC target.
+///
+/// `Ok(None)` means the shell answered but reports no `providers` field at all, which is a shell
+/// older than that addition rather than a shell that has lost its providers. Treating the two the
+/// same would warn about drift on every pre-existing install.
+fn shell_providers(ctx: &Context) -> std::result::Result<Option<Vec<String>>, crate::qs::IpcError> {
+    let reply = crate::qs::QsClient::new(&ctx.config).call("shell", "info", &[])?;
+    let Some(items) = reply.field("providers").and_then(Value::as_array) else {
+        return Ok(None);
+    };
+    Ok(Some(
+        items
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect(),
+    ))
 }

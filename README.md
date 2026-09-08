@@ -51,8 +51,10 @@ epochctl launcher close
 epochctl launcher provider files      # jump straight into a provider
 epochctl launcher keybinds            # shorthand for `provider keybinds`
 epochctl launcher status              # open | closed
-epochctl launcher providers
 ```
+
+Provider listing lives under [Backend](#backend), not here: providers belong to EpochOxide, and
+`search`, `activate`, and `menu` all use them without the launcher being involved.
 
 ### Panels
 
@@ -100,7 +102,7 @@ epochctl activate apps firefox.desktop
 ```
 
 `search` with no `--provider` asks EpochOxide which providers answer queries and searches all of
-them.
+them. Run `providers` to see what you can pass to `--provider`.
 
 ### Diagnostics
 
@@ -117,7 +119,13 @@ ok   target launcher   epochctl launcher available
 ok   target panel      epochctl panel available
 ok   target shell      epochctl shell / ping / reload available
 ok   epochoxide        7 providers at /run/user/1000/epochoxide.sock
+ok   provider sync     shell and backend agree on 7 providers
 ```
+
+`provider sync` compares the provider list the shell is holding against what the backend actually
+reports. They drift when EpochOxide restarts after the shell did, or when the two are pointed at
+different sockets; `epochctl reload` resettles it. The check is skipped against a shell too old to
+report its providers.
 
 ## Global options
 

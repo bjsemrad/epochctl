@@ -117,8 +117,6 @@ pub enum LauncherAction {
     Keybinds,
     /// Report whether the launcher is open
     Status,
-    /// List the providers the launcher can reach
-    Providers,
 }
 
 #[derive(Subcommand)]
