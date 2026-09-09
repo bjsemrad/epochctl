@@ -161,6 +161,8 @@ pub enum ShellAction {
 pub enum CaptureAction {
     /// Take a screenshot
     Screenshot(ScreenshotArgs),
+    /// Read the text out of part of the screen and copy it
+    Ocr(OcrArgs),
     /// Show where screenshots land and which capture tools are installed
     Status,
 }
@@ -222,6 +224,45 @@ pub struct ScreenshotArgs {
     /// Do not keep the file; copy the shot and leave it in the cache
     #[arg(long)]
     pub no_save: bool,
+
+    /// Do not show a notification
+    #[arg(long)]
+    pub no_notify: bool,
+}
+
+#[derive(Args)]
+pub struct OcrArgs {
+    /// What to read text from
+    #[arg(value_enum, default_value_t = ScreenshotMode::Region)]
+    pub mode: ScreenshotMode,
+
+    /// Tesseract language, joining several with `+`; defaults to EpochOxide's ocr_language
+    #[arg(long, short = 'l', value_name = "LANG")]
+    pub lang: Option<String>,
+
+    /// Monitor to read, for fullscreen; defaults to the focused one
+    #[arg(long, short = 'o', value_name = "NAME")]
+    pub output: Option<String>,
+
+    /// Click the window to read instead of taking the focused one
+    #[arg(long)]
+    pub select: bool,
+
+    /// Wait this many seconds before capturing, after any selection is made
+    #[arg(long, short = 'd', value_name = "SECONDS", default_value_t = 0.0)]
+    pub delay: f64,
+
+    /// Keep the captured image as well as the text
+    #[arg(long)]
+    pub keep: bool,
+
+    /// Save the kept image into this directory instead of the configured one
+    #[arg(long, value_name = "DIR")]
+    pub dir: Option<PathBuf>,
+
+    /// Leave the clipboard alone
+    #[arg(long)]
+    pub no_copy: bool,
 
     /// Do not show a notification
     #[arg(long)]

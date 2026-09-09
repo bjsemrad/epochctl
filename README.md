@@ -135,11 +135,24 @@ the shell, which shows the image itself in the notification. Each of those is a 
 | `--no-save` | Copy the shot and leave the file in the cache |
 | `--no-notify` | Take it quietly |
 | `--dir <DIR>` | Save this one somewhere else |
-| `--cursor` | Include the mouse pointer |
+| `--cursor` | Include the mouse pointer (screenshots only) |
 | `--delay`, `-d` | Wait N seconds after any selection is made |
 
 Cancelling a selection prints `cancelled` and exits **0** — pressing Escape is a decision, not a
 failure, and a keybinding should not report one.
+
+```bash
+epochctl capture ocr                       # read a region and copy the text
+epochctl capture ocr window                # read the focused window
+epochctl capture ocr --lang eng+deu
+epochctl capture ocr --keep                # keep the image as well as the text
+```
+
+`ocr` prints the recognised text on stdout and nothing else, so `epochctl capture ocr > notes.txt`
+holds text rather than a status line; whether it was copied is what the notification says. A region
+with nothing legible in it prints `no text found` and exits 0. It needs `tesseract`, which
+`capture status` reports on. Reading happens in EpochOxide, so tesseract has to be on the daemon's
+`PATH` -- the Nix modules put it there -- not necessarily in your shell's.
 
 `epochctl panel toggle capture` opens the same options as a panel in the bar drawer, for the times
 a menu is easier than remembering which key does which mode.

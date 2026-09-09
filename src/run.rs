@@ -279,6 +279,7 @@ fn shell(ctx: &Context, action: ShellAction) -> Result<()> {
 fn capture(ctx: &Context, action: CaptureAction) -> Result<()> {
     match action {
         CaptureAction::Screenshot(args) => screenshot(ctx, args),
+        CaptureAction::Ocr(args) => ocr(ctx, args),
         CaptureAction::Status => capture_status(ctx),
     }
 }
@@ -367,6 +368,57 @@ fn screenshot(ctx: &Context, args: ScreenshotArgs) -> Result<()> {
     Ok(())
 }
 
+fn ocr(ctx: &Context, args: OcrArgs) -> Result<()> {
+    let mut params = json!({
+        "mode": args.mode.as_str(),
+        "select": args.select,
+        "delay": args.delay,
+        "save": args.keep,
+    });
+    let object = params.as_object_mut().expect("params is an object");
+    if let Some(language) = &args.lang {
+        object.insert("language".into(), json!(language));
+    }
+    if let Some(output) = &args.output {
+        object.insert("output".into(), json!(output));
+    }
+    if let Some(directory) = &args.dir {
+        object.insert("directory".into(), json!(directory.display().to_string()));
+    }
+    if args.no_copy {
+        object.insert("copy".into(), json!(false));
+    }
+    if args.no_notify {
+        object.insert("notify".into(), json!(false));
+    }
+
+    if ctx.dry_run {
+        println!("epochoxide api capture.ocr --params '{params}'");
+        return Ok(());
+    }
+
+    let mut client = ctx.oxide()?;
+    client.set_read_timeout(None)?;
+    let result = client.api("capture.ocr", params)?;
+
+    ctx.format.emit(&result, || {
+        if result.get("cancelled").and_then(Value::as_bool) == Some(true) {
+            println!("cancelled");
+            return;
+        }
+        // The text is the whole point, so it is all that goes to stdout: `epochctl capture ocr >
+        // notes.txt` should hold text and nothing else. Whether it was copied is what the
+        // notification is for.
+        let text = result.get("text").and_then(Value::as_str).unwrap_or("");
+        if text.is_empty() {
+            println!("no text found");
+            return;
+        }
+        println!("{text}");
+    });
+    Ok(())
+}
+
 fn capture_status(ctx: &Context) -> Result<()> {
     if ctx.dry_run {
         println!("epochoxide api capture.status");
@@ -390,6 +442,15 @@ fn capture_status(ctx: &Context) -> Result<()> {
                 "none".to_string()
             } else {
                 defaults.join(", ")
+            }
+        );
+        println!(
+            "{} {}",
+            pad("ocr", 12),
+            if flag("ocr") {
+                format!("available, reading {}", text("ocr_language"))
+            } else {
+                "tesseract is not installed".to_string()
             }
         );
         let compositor = text("compositor");
