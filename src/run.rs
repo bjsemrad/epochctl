@@ -85,6 +85,7 @@ pub fn dispatch(ctx: &Context, command: Command) -> Result<()> {
         Command::Shell { action } => shell(ctx, action),
         Command::Ping => shell(ctx, ShellAction::Ping),
         Command::Reload { hard } => shell(ctx, ShellAction::Reload { hard }),
+        Command::Capture { action } => capture(ctx, action),
         Command::Search(args) => search(ctx, args),
         Command::Activate(args) => activate(ctx, args),
         Command::Providers => providers(ctx),
@@ -275,6 +276,169 @@ fn shell(ctx: &Context, action: ShellAction) -> Result<()> {
     Ok(())
 }
 
+fn capture(ctx: &Context, action: CaptureAction) -> Result<()> {
+    match action {
+        CaptureAction::Screenshot(args) => screenshot(ctx, args),
+        CaptureAction::Status => capture_status(ctx),
+    }
+}
+
+fn screenshot(ctx: &Context, args: ScreenshotArgs) -> Result<()> {
+    // The negative flags are only sent when they were actually passed: leaving them out is what
+    // lets the backend apply the user's configured defaults rather than this CLI's idea of them.
+    let mut params = json!({
+        "mode": args.mode.as_str(),
+        "select": args.select,
+        "cursor": args.cursor,
+        "delay": args.delay,
+    });
+    let object = params.as_object_mut().expect("params is an object");
+    if let Some(output) = &args.output {
+        object.insert("output".into(), json!(output));
+    }
+    if let Some(directory) = &args.dir {
+        object.insert("directory".into(), json!(directory.display().to_string()));
+    }
+    for (flag, key) in [
+        (args.no_copy, "copy"),
+        (args.no_save, "save"),
+        (args.no_notify, "notify"),
+    ] {
+        if flag {
+            object.insert(key.into(), json!(false));
+        }
+    }
+
+    if ctx.dry_run {
+        println!("epochoxide api capture.screenshot --params '{params}'");
+        return Ok(());
+    }
+
+    let mut client = ctx.oxide()?;
+    // Region and window selection wait on the user, and --delay waits on the clock; neither fits
+    // under the timeout that keeps a launcher query honest.
+    client.set_read_timeout(None)?;
+    let shot = client.api("capture.screenshot", params)?;
+
+    ctx.format.emit(&shot, || {
+        if shot.get("cancelled").and_then(Value::as_bool) == Some(true) {
+            println!("cancelled");
+            return;
+        }
+        let text = |key: &str| shot.get(key).and_then(Value::as_str).unwrap_or_default();
+        let flag = |key: &str| shot.get(key).and_then(Value::as_bool).unwrap_or(false);
+        let number = |key: &str| shot.get(key).and_then(Value::as_u64).unwrap_or(0);
+
+        let show = |label: &str, value: &str| {
+            if !value.is_empty() {
+                println!("{} {value}", pad(label, 10));
+            }
+        };
+        show("mode", text("mode"));
+        show("window", text("window"));
+        show("monitor", text("output"));
+        show("region", text("geometry"));
+        if flag("saved") {
+            show("saved", text("path"));
+        } else {
+            show("cached", text("path"));
+        }
+        let (width, height) = (number("width"), number("height"));
+        let mut size = String::new();
+        if width > 0 && height > 0 {
+            size.push_str(&format!("{width}×{height}"));
+        }
+        if number("bytes") > 0 {
+            if !size.is_empty() {
+                size.push_str(", ");
+            }
+            size.push_str(&human_bytes(number("bytes")));
+        }
+        show("size", &size);
+        show(
+            "clipboard",
+            if flag("copied") {
+                "copied"
+            } else {
+                "left alone"
+            },
+        );
+    });
+    Ok(())
+}
+
+fn capture_status(ctx: &Context) -> Result<()> {
+    if ctx.dry_run {
+        println!("epochoxide api capture.status");
+        return Ok(());
+    }
+    let status = ctx.oxide()?.api("capture.status", json!({}))?;
+    ctx.format.emit(&status, || {
+        let text = |key: &str| status.get(key).and_then(Value::as_str).unwrap_or_default();
+        let flag = |key: &str| status.get(key).and_then(Value::as_bool).unwrap_or(false);
+        println!("{} {}", pad("directory", 12), text("directory"));
+        println!("{} {}", pad("filename", 12), text("filename"));
+        let defaults: Vec<&str> = [("copy", "copy"), ("save", "save"), ("notify", "notify")]
+            .into_iter()
+            .filter(|(key, _)| flag(key))
+            .map(|(_, name)| name)
+            .collect();
+        println!(
+            "{} {}",
+            pad("defaults", 12),
+            if defaults.is_empty() {
+                "none".to_string()
+            } else {
+                defaults.join(", ")
+            }
+        );
+        let compositor = text("compositor");
+        println!(
+            "{} {}",
+            pad("compositor", 12),
+            if compositor.is_empty() {
+                "none responding".to_string()
+            } else if flag("window_capture") {
+                format!("{compositor}, window capture available")
+            } else {
+                format!("{compositor}, no window geometry -- use region")
+            }
+        );
+        let empty = Vec::new();
+        for tool in status
+            .get("tools")
+            .and_then(Value::as_array)
+            .unwrap_or(&empty)
+        {
+            let name = tool.get("name").and_then(Value::as_str).unwrap_or("");
+            let path = tool.get("path").and_then(Value::as_str);
+            let required = tool
+                .get("required")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let purpose = tool.get("purpose").and_then(Value::as_str).unwrap_or("");
+            let detail = match path {
+                Some(path) => path.to_string(),
+                None if required => format!("missing -- required for {purpose}"),
+                None => format!("missing -- no {purpose}"),
+            };
+            println!("{} {detail}", pad(name, 12));
+        }
+    });
+    Ok(())
+}
+
+/// A file size in the units a person reads, not bytes.
+fn human_bytes(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    match bytes {
+        0..KB => format!("{bytes} B"),
+        KB..MB => format!("{:.0} KB", bytes as f64 / KB as f64),
+        _ => format!("{:.1} MB", bytes as f64 / MB as f64),
+    }
+}
+
 fn search(ctx: &Context, args: SearchArgs) -> Result<()> {
     let mut client = ctx.oxide()?;
     // An empty provider list means "every provider that answers queries", which has to be asked
@@ -383,4 +547,18 @@ fn menu(ctx: &Context, name: &str) -> Result<()> {
         }
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sizes_are_reported_in_units_people_read() {
+        assert_eq!(human_bytes(0), "0 B");
+        assert_eq!(human_bytes(512), "512 B");
+        assert_eq!(human_bytes(1024), "1 KB");
+        assert_eq!(human_bytes(305_481), "298 KB");
+        assert_eq!(human_bytes(3_500_000), "3.3 MB");
+    }
 }

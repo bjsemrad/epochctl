@@ -9,6 +9,10 @@ use std::time::Duration;
 
 const TIMEOUT: Duration = Duration::from_millis(3000);
 
+/// The Epoch API contract major this build was written against. A daemon speaking a different
+/// major refuses the call rather than answering with a shape epochctl may not understand.
+const API_VERSION: u32 = 1;
+
 #[derive(Debug)]
 pub enum OxideError {
     NotRunning { socket: String, detail: String },
@@ -156,6 +160,26 @@ impl Client {
         self.send(&payload)?;
         self.recv()?
             .ok_or_else(|| OxideError::Protocol("connection closed without a response".to_string()))
+    }
+
+    /// Stop bounding how long a call may take.
+    ///
+    /// The default is right for a query the daemon answers from memory, but a capture waits on the
+    /// user drawing a rectangle, and there is no sensible guess for how long that takes.
+    pub fn set_read_timeout(&mut self, timeout: Option<Duration>) -> Result<(), OxideError> {
+        self.writer
+            .set_read_timeout(timeout)
+            .map_err(|err| OxideError::Protocol(format!("configuring socket: {err}")))
+    }
+
+    /// Call a method on the Epoch API. `method` is `group.method`, as `api.describe` lists them.
+    pub fn api(&mut self, method: &str, params: Value) -> Result<Value, OxideError> {
+        self.request(json!({
+            "type": "api",
+            "method": method,
+            "params": params,
+            "version": API_VERSION,
+        }))
     }
 
     pub fn providers(&mut self) -> Result<Vec<Provider>, OxideError> {

@@ -1,4 +1,4 @@
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell as CompletionShell;
 use std::path::PathBuf;
 
@@ -80,6 +80,11 @@ pub enum Command {
         #[arg(long)]
         hard: bool,
     },
+    /// Take screenshots
+    Capture {
+        #[command(subcommand)]
+        action: CaptureAction,
+    },
     /// Search the EpochOxide providers
     Search(SearchArgs),
     /// Activate a result returned by `search`
@@ -150,6 +155,77 @@ pub enum ShellAction {
     },
     /// List the IPC targets the running shell exposes
     Targets,
+}
+
+#[derive(Subcommand)]
+pub enum CaptureAction {
+    /// Take a screenshot
+    Screenshot(ScreenshotArgs),
+    /// Show where screenshots land and which capture tools are installed
+    Status,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
+pub enum ScreenshotMode {
+    /// Drag out a rectangle
+    Region,
+    /// The focused window, or one you click with --select
+    Window,
+    /// One whole monitor
+    #[value(alias = "screen", alias = "monitor", alias = "output")]
+    Fullscreen,
+    /// Every monitor, as one image
+    All,
+}
+
+impl ScreenshotMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Region => "region",
+            Self::Window => "window",
+            Self::Fullscreen => "fullscreen",
+            Self::All => "all",
+        }
+    }
+}
+
+#[derive(Args)]
+pub struct ScreenshotArgs {
+    /// What to capture
+    #[arg(value_enum, default_value_t = ScreenshotMode::Region)]
+    pub mode: ScreenshotMode,
+
+    /// Monitor to capture, for fullscreen; defaults to the focused one
+    #[arg(long, short = 'o', value_name = "NAME")]
+    pub output: Option<String>,
+
+    /// Click the window to capture instead of taking the focused one
+    #[arg(long)]
+    pub select: bool,
+
+    /// Include the mouse pointer
+    #[arg(long)]
+    pub cursor: bool,
+
+    /// Wait this many seconds before capturing, after any selection is made
+    #[arg(long, short = 'd', value_name = "SECONDS", default_value_t = 0.0)]
+    pub delay: f64,
+
+    /// Save into this directory instead of the configured one
+    #[arg(long, value_name = "DIR")]
+    pub dir: Option<PathBuf>,
+
+    /// Leave the clipboard alone
+    #[arg(long)]
+    pub no_copy: bool,
+
+    /// Do not keep the file; copy the shot and leave it in the cache
+    #[arg(long)]
+    pub no_save: bool,
+
+    /// Do not show a notification
+    #[arg(long)]
+    pub no_notify: bool,
 }
 
 #[derive(Args)]

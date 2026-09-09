@@ -8,7 +8,7 @@ It talks to two things:
 | Target | Transport | Used for |
 |--------|-----------|----------|
 | **EpochShell** (Quickshell) | `qs ipc` subprocess | launcher, panels, reload |
-| **EpochOxide** | Unix socket, newline-delimited JSON | search, activation, providers, menus |
+| **EpochOxide** | Unix socket, newline-delimited JSON | search, activation, providers, menus, capture |
 
 ## Why not just call `qs`?
 
@@ -68,8 +68,8 @@ epochctl panel close-all
 ```
 
 Panel names come from the shell itself, so `panel list` is always authoritative. With the current
-shell that is `audio`, `battery`, `bluetooth`, `calendar`, `ethernet`, `homeassistant`, `media`,
-`notifications`, `system`, `tailscale`, `weather`, and `wifi`. Asking for one that does not exist
+shell that is `audio`, `battery`, `bluetooth`, `calendar`, `capture`, `ethernet`, `homeassistant`,
+`localsend`, `media`, `notifications`, `system`, `tailscale`, `weather`, and `wifi`. Asking for one that does not exist
 lists the ones that do:
 
 ```console
@@ -104,6 +104,50 @@ epochctl activate apps firefox.desktop
 `search` with no `--provider` asks EpochOxide which providers answer queries and searches all of
 them. Run `providers` to see what you can pass to `--provider`.
 
+### Capture
+
+```bash
+epochctl capture screenshot                      # drag out a region
+epochctl capture screenshot window               # the focused window
+epochctl capture screenshot window --select      # click the window to capture
+epochctl capture screenshot fullscreen           # the focused monitor
+epochctl capture screenshot fullscreen -o DP-3   # a named monitor
+epochctl capture screenshot all                  # every monitor, as one image
+epochctl capture status
+```
+
+```console
+$ epochctl capture screenshot window
+mode       window
+window     thor: epochoxide
+region     6,46 2148x1388
+saved      /home/brian/Pictures/Screenshots/screenshot-20260112-144233.png
+size       2864×1850, 298 KB
+clipboard  copied
+```
+
+Every shot is saved to EpochOxide's `screenshot_dir`, copied to the clipboard, and announced to
+the shell, which shows the image itself in the notification. Each of those is a flag away:
+
+| Flag | Effect |
+|------|--------|
+| `--no-copy` | Leave the clipboard alone |
+| `--no-save` | Copy the shot and leave the file in the cache |
+| `--no-notify` | Take it quietly |
+| `--dir <DIR>` | Save this one somewhere else |
+| `--cursor` | Include the mouse pointer |
+| `--delay`, `-d` | Wait N seconds after any selection is made |
+
+Cancelling a selection prints `cancelled` and exits **0** — pressing Escape is a decision, not a
+failure, and a keybinding should not report one.
+
+`epochctl panel toggle capture` opens the same options as a panel in the bar drawer, for the times
+a menu is easier than remembering which key does which mode.
+
+`capture status` shows where shots land and which of `grim`, `slurp`, `wl-copy`, and `notify-send`
+are actually installed. Window capture also needs a compositor that reports where its windows are;
+`status` says whether this one does.
+
 ### Diagnostics
 
 ```bash
@@ -119,8 +163,13 @@ ok   target launcher   epochctl launcher available
 ok   target panel      epochctl panel available
 ok   target shell      epochctl shell / ping / reload available
 ok   epochoxide        7 providers at /run/user/1000/epochoxide.sock
+ok   capture           saving to /home/brian/Pictures/Screenshots
 ok   provider sync     shell and backend agree on 7 providers
 ```
+
+`capture` reports the screenshot tools EpochOxide can reach. They are installed separately from
+EpochShell, and a missing one is otherwise only noticed at the moment someone presses their
+screenshot key.
 
 `provider sync` compares the provider list the shell is holding against what the backend actually
 reports. They drift when EpochOxide restarts after the shell did, or when the two are pointed at

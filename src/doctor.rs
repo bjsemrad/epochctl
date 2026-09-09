@@ -170,22 +170,25 @@ pub fn run(ctx: &Context) -> Result<()> {
     let socket = ctx.config.socket.clone();
     let mut backend_providers: Option<Vec<String>> = None;
     match crate::oxide::Client::connect(&socket) {
-        Ok(mut client) => match client.providers() {
-            Ok(providers) => {
-                checks.push(Check::new(
-                    "epochoxide",
-                    Level::Ok,
-                    format!("{} providers at {}", providers.len(), socket.display()),
-                ));
-                backend_providers = Some(
-                    providers
-                        .into_iter()
-                        .map(|provider| provider.name)
-                        .collect(),
-                );
+        Ok(mut client) => {
+            match client.providers() {
+                Ok(providers) => {
+                    checks.push(Check::new(
+                        "epochoxide",
+                        Level::Ok,
+                        format!("{} providers at {}", providers.len(), socket.display()),
+                    ));
+                    backend_providers = Some(
+                        providers
+                            .into_iter()
+                            .map(|provider| provider.name)
+                            .collect(),
+                    );
+                }
+                Err(err) => checks.push(Check::new("epochoxide", Level::Warn, err.to_string())),
             }
-            Err(err) => checks.push(Check::new("epochoxide", Level::Warn, err.to_string())),
-        },
+            checks.push(capture(&mut client));
+        }
         Err(err) => checks.push(Check::new("epochoxide", Level::Fail, err.to_string())),
     }
 
@@ -290,6 +293,50 @@ pub fn run(ctx: &Context) -> Result<()> {
         }
     });
     Ok(())
+}
+
+/// Whether `epochctl capture` can actually take a screenshot here.
+///
+/// The tools it needs are installed separately from EpochShell, so a missing one is a
+/// configuration problem rather than a bug -- and it is only ever noticed at the moment someone
+/// presses their screenshot key, which is the worst time to find out.
+fn capture(client: &mut crate::oxide::Client) -> Check {
+    let status = match client.api("capture.status", json!({})) {
+        Ok(status) => status,
+        // A backend older than the capture group has no such method; that is version skew, not a
+        // broken machine.
+        Err(err) => return Check::new("capture", Level::Warn, err.to_string()),
+    };
+    let empty = Vec::new();
+    let tools = status
+        .get("tools")
+        .and_then(Value::as_array)
+        .unwrap_or(&empty);
+    let missing: Vec<&str> = tools
+        .iter()
+        .filter(|tool| tool.get("path").map(Value::is_null).unwrap_or(true))
+        .filter_map(|tool| tool.get("name").and_then(Value::as_str))
+        .collect();
+    let required_missing = tools.iter().any(|tool| {
+        tool.get("path").map(Value::is_null).unwrap_or(true)
+            && tool.get("required").and_then(Value::as_bool) == Some(true)
+    });
+    let directory = status
+        .get("directory")
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    if missing.is_empty() {
+        return Check::new("capture", Level::Ok, format!("saving to {directory}"));
+    }
+    Check::new(
+        "capture",
+        if required_missing {
+            Level::Fail
+        } else {
+            Level::Warn
+        },
+        format!("not installed: {}", missing.join(", ")),
+    )
 }
 
 /// The provider names the running shell currently has, as reported by its `shell` IPC target.
