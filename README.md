@@ -69,7 +69,7 @@ epochctl panel close-all
 
 Panel names come from the shell itself, so `panel list` is always authoritative. With the current
 shell that is `audio`, `battery`, `bluetooth`, `calendar`, `capture`, `ethernet`, `homeassistant`,
-`localsend`, `media`, `notifications`, `system`, `tailscale`, `weather`, and `wifi`. Asking for one that does not exist
+`localsend`, `media`, `notifications`, `record`, `system`, `tailscale`, `weather`, and `wifi`. Asking for one that does not exist
 lists the ones that do:
 
 ```console
@@ -181,7 +181,7 @@ whichever way it was started. Only one runs at a time: starting a second is refu
 the first has been going. `stop` with nothing running prints `not recording` and exits 0, so a key
 bound to it is safe to press twice. Recording needs `wf-recorder`; `capture status` says so.
 
-`epochctl panel toggle capture` opens the same options -- stills, OCR, and recording -- as a panel
+`epochctl panel toggle capture` and `epochctl panel toggle record` open the same options as panels
 in the bar drawer, for the times a menu is easier than remembering which key does which mode.
 
 `capture status` shows where shots land and which of `grim`, `slurp`, `wl-copy`, and `notify-send`
