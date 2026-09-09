@@ -181,8 +181,8 @@ whichever way it was started. Only one runs at a time: starting a second is refu
 the first has been going. `stop` with nothing running prints `not recording` and exits 0, so a key
 bound to it is safe to press twice. Recording needs `wf-recorder`; `capture status` says so.
 
-`epochctl panel toggle capture` opens the same options as a panel in the bar drawer, for the times
-a menu is easier than remembering which key does which mode.
+`epochctl panel toggle capture` opens the same options -- stills, OCR, and recording -- as a panel
+in the bar drawer, for the times a menu is easier than remembering which key does which mode.
 
 `capture status` shows where shots land and which of `grim`, `slurp`, `wl-copy`, and `notify-send`
 are actually installed. Window capture also needs a compositor that reports where its windows are;
