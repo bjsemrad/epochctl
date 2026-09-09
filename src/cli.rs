@@ -113,8 +113,6 @@ pub enum LauncherAction {
         /// Provider name, for example files, clipboard, windows, keybinds
         name: String,
     },
-    /// Open the keybinds menu
-    Keybinds,
     /// Report whether the launcher is open
     Status,
 }

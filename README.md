@@ -49,7 +49,7 @@ epochctl launcher toggle
 epochctl launcher open
 epochctl launcher close
 epochctl launcher provider files      # jump straight into a provider
-epochctl launcher keybinds            # shorthand for `provider keybinds`
+epochctl launcher provider keybinds
 epochctl launcher status              # open | closed
 ```
 

@@ -130,10 +130,6 @@ fn launcher(ctx: &Context, action: LauncherAction) -> Result<()> {
             let reply = ctx.call("launcher", "openProvider", &[&name])?;
             report_action(ctx, reply, &format!("launcher opened on {name}"));
         }
-        LauncherAction::Keybinds => {
-            let reply = ctx.call("launcher", "openKeybinds", &[])?;
-            report_action(ctx, reply, "launcher opened on keybinds");
-        }
         LauncherAction::Status => {
             if ctx.dry_run {
                 println!(
