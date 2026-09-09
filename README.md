@@ -8,7 +8,7 @@ It talks to two things:
 | Target | Transport | Used for |
 |--------|-----------|----------|
 | **EpochShell** (Quickshell) | `qs ipc` subprocess | launcher, panels, reload |
-| **EpochOxide** | Unix socket, newline-delimited JSON | search, activation, providers, menus, capture |
+| **EpochOxide** | Unix socket, newline-delimited JSON | search, activation, providers, menus, capture, nix |
 
 ## Why not just call `qs`?
 
@@ -69,7 +69,8 @@ epochctl panel close-all
 
 Panel names come from the shell itself, so `panel list` is always authoritative. With the current
 shell that is `audio`, `battery`, `bluetooth`, `calendar`, `capture`, `ethernet`, `homeassistant`,
-`localsend`, `media`, `notifications`, `record`, `system`, `tailscale`, `weather`, and `wifi`. Asking for one that does not exist
+`localsend`, `media`, `nix`, `notifications`, `record`, `system`, `tailscale`, `weather`, and
+`wifi`. Asking for one that does not exist
 lists the ones that do:
 
 ```console
@@ -187,6 +188,33 @@ in the bar drawer, for the times a menu is easier than remembering which key doe
 `capture status` shows where shots land and which of `grim`, `slurp`, `wl-copy`, and `notify-send`
 are actually installed. Window capture also needs a compositor that reports where its windows are;
 `status` says whether this one does.
+
+### Nix
+
+```bash
+epochctl nix status                 # what the last check found
+epochctl nix check                  # resolve every input now
+epochctl nix hosts
+epochctl nix update                 # opens a terminal running your update command
+epochctl nix rebuild thor           # opens a terminal running thor's rebuild command
+```
+
+```console
+$ epochctl nix check
+flake      /home/brian/nixconfig
+checked    moments ago
+locked     3 hours ago
+updates    1 of 23 inputs can move
+  nixpkgs              6aefcda -> d6524aa  github:NixOS/nixpkgs/nixos-unstable
+```
+
+Checking never writes to your flake -- EpochOxide resolves the inputs into a throwaway lock file
+and compares. `status` reads the last result and is cheap; `check` talks to every input's host, so
+it has no timeout.
+
+`update` and `rebuild` open a terminal running commands *you* configured, from the flake's
+directory, and nothing else. `rebuild` with no host named is refused when the flake defines several
+-- picking one for you is how the wrong machine gets rebuilt.
 
 ### Diagnostics
 

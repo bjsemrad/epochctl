@@ -85,6 +85,11 @@ pub enum Command {
         #[command(subcommand)]
         action: CaptureAction,
     },
+    /// Flake update status, updates, and rebuilds
+    Nix {
+        #[command(subcommand)]
+        action: NixAction,
+    },
     /// Search the EpochOxide providers
     Search(SearchArgs),
     /// Activate a result returned by `search`
@@ -315,6 +320,23 @@ pub struct RecordArgs {
     /// Do not show a notification when the recording finishes
     #[arg(long)]
     pub no_notify: bool,
+}
+
+#[derive(Subcommand)]
+pub enum NixAction {
+    /// Show the last check: what is pinned, and what could move
+    Status,
+    /// Resolve every input now and report what could be updated
+    Check,
+    /// Run the configured update command in a terminal
+    Update,
+    /// Run a host's rebuild command in a terminal
+    Rebuild {
+        /// Host to rebuild, as `nix hosts` lists them
+        host: Option<String>,
+    },
+    /// List the hosts this flake defines and how each is rebuilt
+    Hosts,
 }
 
 #[derive(Args)]

@@ -86,6 +86,7 @@ pub fn dispatch(ctx: &Context, command: Command) -> Result<()> {
         Command::Ping => shell(ctx, ShellAction::Ping),
         Command::Reload { hard } => shell(ctx, ShellAction::Reload { hard }),
         Command::Capture { action } => capture(ctx, action),
+        Command::Nix { action } => nix(ctx, action),
         Command::Search(args) => search(ctx, args),
         Command::Activate(args) => activate(ctx, args),
         Command::Providers => providers(ctx),
@@ -603,6 +604,170 @@ fn human_bytes(bytes: u64) -> String {
         0..KB => format!("{bytes} B"),
         KB..MB => format!("{:.0} KB", bytes as f64 / KB as f64),
         _ => format!("{:.1} MB", bytes as f64 / MB as f64),
+    }
+}
+
+fn nix(ctx: &Context, action: NixAction) -> Result<()> {
+    let (method, params) = match &action {
+        NixAction::Status => ("nix.status", json!({})),
+        NixAction::Check => ("nix.check", json!({})),
+        NixAction::Update => ("nix.update", json!({})),
+        NixAction::Hosts => ("nix.hosts", json!({})),
+        NixAction::Rebuild { host } => (
+            "nix.rebuild",
+            match host {
+                Some(host) => json!({ "host": host }),
+                None => json!({}),
+            },
+        ),
+    };
+
+    if ctx.dry_run {
+        println!("epochoxide api {method} --params '{params}'");
+        return Ok(());
+    }
+
+    let mut client = ctx.oxide()?;
+    // A check resolves every input over the network, and there is no sensible bound on how long
+    // that takes on a slow connection.
+    if matches!(action, NixAction::Check) {
+        client.set_read_timeout(None)?;
+    }
+    let data = client.api(method, params)?;
+
+    match action {
+        NixAction::Update | NixAction::Rebuild { .. } => {
+            ctx.format.emit(&data, || {
+                let command = data.get("command").and_then(Value::as_str).unwrap_or("");
+                println!("running in a terminal: {command}");
+            });
+        }
+        NixAction::Hosts => {
+            ctx.format.emit(&data, || {
+                let empty = Vec::new();
+                let hosts = data.as_array().unwrap_or(&empty);
+                if hosts.is_empty() {
+                    println!("no hosts");
+                    return;
+                }
+                for host in hosts {
+                    let name = host.get("name").and_then(Value::as_str).unwrap_or("");
+                    let rebuild = host.get("rebuild").and_then(Value::as_str).unwrap_or("");
+                    println!(
+                        "{} {}",
+                        pad(name, 14),
+                        if rebuild.is_empty() {
+                            "(no rebuild command)"
+                        } else {
+                            rebuild
+                        }
+                    );
+                }
+            });
+        }
+        NixAction::Status | NixAction::Check => nix_status(ctx, &data),
+    }
+    Ok(())
+}
+
+fn nix_status(ctx: &Context, data: &Value) {
+    ctx.format.emit(data, || {
+        let text = |key: &str| data.get(key).and_then(Value::as_str).unwrap_or_default();
+        let flag = |key: &str| data.get(key).and_then(Value::as_bool).unwrap_or(false);
+        let number = |key: &str| data.get(key).and_then(Value::as_u64).unwrap_or(0);
+
+        if !flag("configured") {
+            println!("no flake configured (set nix_flake in EpochOxide's config)");
+            return;
+        }
+        println!("{} {}", pad("flake", 10), text("flake"));
+        if !flag("available") {
+            println!("{} {}", pad("status", 10), text("reason"));
+            return;
+        }
+        if let Some(error) = data.get("error").and_then(Value::as_str) {
+            println!("{} {error}", pad("error", 10));
+        }
+        let checked = number("checked_at");
+        println!(
+            "{} {}",
+            pad("checked", 10),
+            if flag("checking") {
+                "checking now".to_string()
+            } else if checked == 0 {
+                "never".to_string()
+            } else {
+                format!("{} ago", ago(checked))
+            }
+        );
+        println!("{} {} ago", pad("locked", 10), ago(number("locked_at")));
+
+        let empty = Vec::new();
+        let inputs = data
+            .get("inputs")
+            .and_then(Value::as_array)
+            .unwrap_or(&empty);
+        let updates = number("updates");
+        println!(
+            "{} {}",
+            pad("updates", 10),
+            match (updates, inputs.len()) {
+                (_, 0) => "nothing checked yet".to_string(),
+                (0, total) => format!("none, {total} inputs are current"),
+                (1, total) => format!("1 of {total} inputs can move"),
+                (some, total) => format!("{some} of {total} inputs can move"),
+            }
+        );
+        // Only what can move is listed: a wall of unchanged inputs buries the answer.
+        for input in inputs.iter().filter(|input| {
+            input
+                .get("update_available")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        }) {
+            let field = |key: &str| input.get(key).and_then(Value::as_str).unwrap_or_default();
+            println!(
+                "  {} {} -> {}  {}",
+                pad(field("name"), 20),
+                short_rev(field("current_rev")),
+                short_rev(field("latest_rev")),
+                field("source")
+            );
+        }
+    });
+}
+
+/// A revision as people quote it. Comparison always uses the whole thing.
+fn short_rev(rev: &str) -> String {
+    if rev.is_empty() {
+        "-".to_string()
+    } else {
+        rev.chars().take(7).collect()
+    }
+}
+
+/// A unix timestamp as "3 hours", for a line that already says what it is measuring.
+fn ago(timestamp: u64) -> String {
+    if timestamp == 0 {
+        return "never".to_string();
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|since| since.as_secs())
+        .unwrap_or(0);
+    let seconds = now.saturating_sub(timestamp);
+    let plural = |value: u64, unit: &str| {
+        if value == 1 {
+            format!("1 {unit}")
+        } else {
+            format!("{value} {unit}s")
+        }
+    };
+    match seconds {
+        0..60 => "moments".to_string(),
+        60..3600 => plural(seconds / 60, "minute"),
+        3600..86400 => plural(seconds / 3600, "hour"),
+        _ => plural(seconds / 86400, "day"),
     }
 }
 
