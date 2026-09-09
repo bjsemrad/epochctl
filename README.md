@@ -154,6 +154,33 @@ with nothing legible in it prints `no text found` and exits 0. It needs `tessera
 `capture status` reports on. Reading happens in EpochOxide, so tesseract has to be on the daemon's
 `PATH` -- the Nix modules put it there -- not necessarily in your shell's.
 
+```bash
+epochctl capture record                    # record a region
+epochctl capture record fullscreen         # record the focused monitor
+epochctl capture record window --select    # click the window to record
+epochctl capture record status             # what is running, if anything
+epochctl capture record stop               # finish the file
+```
+
+```console
+$ epochctl capture record status
+mode      fullscreen
+monitor   eDP-1
+file      /home/brian/Videos/Recordings/recording-20260112-144233.mp4
+running   0:42
+
+$ epochctl capture record stop
+saved     /home/brian/Videos/Recordings/recording-20260112-144233.mp4
+length    0:42
+size      6.5 MB
+```
+
+The daemon owns the recorder, so the recording survives the command that started it, keeps running
+across a `stop` from any other terminal or from the bar, and shows up in the shell's indicator
+whichever way it was started. Only one runs at a time: starting a second is refused with how long
+the first has been going. `stop` with nothing running prints `not recording` and exits 0, so a key
+bound to it is safe to press twice. Recording needs `wf-recorder`; `capture status` says so.
+
 `epochctl panel toggle capture` opens the same options as a panel in the bar drawer, for the times
 a menu is easier than remembering which key does which mode.
 

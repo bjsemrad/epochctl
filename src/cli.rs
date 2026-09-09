@@ -163,6 +163,8 @@ pub enum CaptureAction {
     Screenshot(ScreenshotArgs),
     /// Read the text out of part of the screen and copy it
     Ocr(OcrArgs),
+    /// Start, stop, and inspect a screen recording
+    Record(RecordArgs),
     /// Show where screenshots land and which capture tools are installed
     Status,
 }
@@ -265,6 +267,52 @@ pub struct OcrArgs {
     pub no_copy: bool,
 
     /// Do not show a notification
+    #[arg(long)]
+    pub no_notify: bool,
+}
+
+/// What `capture record` should do. The recording modes and the two verbs share one word so a
+/// keybinding reads `epochctl capture record region` and `epochctl capture record stop`.
+#[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
+pub enum RecordTarget {
+    /// Record a rectangle you drag out
+    Region,
+    /// Record the focused window, or one you click with --select
+    Window,
+    /// Record one whole monitor
+    #[value(alias = "screen", alias = "monitor", alias = "output")]
+    Fullscreen,
+    /// Record every monitor as one video
+    All,
+    /// Stop the recording in progress
+    Stop,
+    /// Report what is being recorded
+    Status,
+}
+
+#[derive(Args)]
+pub struct RecordArgs {
+    /// What to record, or `stop` to finish the recording in progress
+    #[arg(value_enum, default_value_t = RecordTarget::Region)]
+    pub target: RecordTarget,
+
+    /// Monitor to record, for fullscreen; defaults to the focused one
+    #[arg(long, short = 'o', value_name = "NAME")]
+    pub output: Option<String>,
+
+    /// Click the window to record instead of taking the focused one
+    #[arg(long)]
+    pub select: bool,
+
+    /// Wait this many seconds before starting, after any selection is made
+    #[arg(long, short = 'd', value_name = "SECONDS", default_value_t = 0.0)]
+    pub delay: f64,
+
+    /// Write into this directory instead of the configured one
+    #[arg(long, value_name = "DIR")]
+    pub dir: Option<PathBuf>,
+
+    /// Do not show a notification when the recording finishes
     #[arg(long)]
     pub no_notify: bool,
 }

@@ -280,6 +280,7 @@ fn capture(ctx: &Context, action: CaptureAction) -> Result<()> {
     match action {
         CaptureAction::Screenshot(args) => screenshot(ctx, args),
         CaptureAction::Ocr(args) => ocr(ctx, args),
+        CaptureAction::Record(args) => record(ctx, args),
         CaptureAction::Status => capture_status(ctx),
     }
 }
@@ -419,6 +420,102 @@ fn ocr(ctx: &Context, args: OcrArgs) -> Result<()> {
     Ok(())
 }
 
+fn record(ctx: &Context, args: RecordArgs) -> Result<()> {
+    let (method, params) = match args.target {
+        RecordTarget::Status => ("capture.recording", json!({})),
+        RecordTarget::Stop => {
+            let mut params = json!({});
+            if args.no_notify {
+                params["notify"] = json!(false);
+            }
+            ("capture.stopRecording", params)
+        }
+        mode => {
+            let mut params = json!({
+                "mode": record_mode(mode),
+                "select": args.select,
+                "delay": args.delay,
+            });
+            let object = params.as_object_mut().expect("params is an object");
+            if let Some(output) = &args.output {
+                object.insert("output".into(), json!(output));
+            }
+            if let Some(directory) = &args.dir {
+                object.insert("directory".into(), json!(directory.display().to_string()));
+            }
+            ("capture.record", params)
+        }
+    };
+
+    if ctx.dry_run {
+        println!("epochoxide api {method} --params '{params}'");
+        return Ok(());
+    }
+
+    let mut client = ctx.oxide()?;
+    // Starting a region recording waits on the user drawing a box, and stopping waits on the
+    // recorder finishing the file.
+    client.set_read_timeout(None)?;
+    let session = client.api(method, params)?;
+
+    ctx.format.emit(&session, || {
+        let text = |key: &str| session.get(key).and_then(Value::as_str).unwrap_or_default();
+        let flag = |key: &str| session.get(key).and_then(Value::as_bool).unwrap_or(false);
+        let number = |key: &str| session.get(key).and_then(Value::as_u64).unwrap_or(0);
+        let show = |label: &str, value: &str| {
+            if !value.is_empty() {
+                println!("{} {value}", pad(label, 9));
+            }
+        };
+
+        if flag("cancelled") {
+            println!("cancelled");
+            return;
+        }
+        if flag("recording") {
+            // Starting and asking both answer with a running session; the elapsed time is what
+            // tells them apart to a reader.
+            show("mode", text("mode"));
+            show("monitor", text("output"));
+            show("region", text("geometry"));
+            show("file", text("path"));
+            if number("seconds") > 0 {
+                show("running", &human_duration(number("seconds")));
+            }
+            return;
+        }
+        // Not recording: either a stop that finished a file, or nothing was going on.
+        if text("path").is_empty() {
+            println!("not recording");
+            return;
+        }
+        show("saved", text("path"));
+        show("length", &human_duration(number("seconds")));
+        show("size", &human_bytes(number("bytes")));
+    });
+    Ok(())
+}
+
+/// The API's spelling of a recording mode. `stop` and `status` never reach this.
+fn record_mode(target: RecordTarget) -> &'static str {
+    match target {
+        RecordTarget::Window => "window",
+        RecordTarget::Fullscreen => "fullscreen",
+        RecordTarget::All => "all",
+        _ => "region",
+    }
+}
+
+/// A duration as a person reads it back: `0:42`, `3:07`, `1:02:13`.
+fn human_duration(seconds: u64) -> String {
+    let (hours, minutes, seconds) = (seconds / 3600, (seconds % 3600) / 60, seconds % 60);
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
+}
+
 fn capture_status(ctx: &Context) -> Result<()> {
     if ctx.dry_run {
         println!("epochoxide api capture.status");
@@ -442,6 +539,15 @@ fn capture_status(ctx: &Context) -> Result<()> {
                 "none".to_string()
             } else {
                 defaults.join(", ")
+            }
+        );
+        println!(
+            "{} {}",
+            pad("recording", 12),
+            if flag("record") {
+                format!("available, saving to {}", text("recording_directory"))
+            } else {
+                "wf-recorder is not installed".to_string()
             }
         );
         println!(
