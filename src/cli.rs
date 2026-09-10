@@ -90,6 +90,11 @@ pub enum Command {
         #[command(subcommand)]
         action: ToggleAction,
     },
+    /// Machine, battery health, and firmware
+    System {
+        #[command(subcommand)]
+        action: SystemAction,
+    },
     /// Show what the CPU is doing about power
     Power {
         #[command(subcommand)]
@@ -330,6 +335,18 @@ pub struct RecordArgs {
     /// Do not show a notification when the recording finishes
     #[arg(long)]
     pub no_notify: bool,
+}
+
+#[derive(Subcommand)]
+pub enum SystemAction {
+    /// What machine this is, and how its battery has worn
+    Info,
+    /// Firmware updates fwupd is offering
+    Firmware {
+        /// Ask fwupd again instead of using the cached answer
+        #[arg(long)]
+        refresh: bool,
+    },
 }
 
 #[derive(Subcommand)]

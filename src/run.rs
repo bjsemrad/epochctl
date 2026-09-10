@@ -86,6 +86,7 @@ pub fn dispatch(ctx: &Context, command: Command) -> Result<()> {
         Command::Ping => shell(ctx, ShellAction::Ping),
         Command::Reload { hard } => shell(ctx, ShellAction::Reload { hard }),
         Command::Capture { action } => capture(ctx, action),
+        Command::System { action } => system(ctx, action),
         Command::Toggle { action } => toggle(ctx, action),
         Command::Power { action } => power(ctx, action),
         Command::Nix { action } => nix(ctx, action),
@@ -607,6 +608,129 @@ fn human_bytes(bytes: u64) -> String {
         KB..MB => format!("{:.0} KB", bytes as f64 / KB as f64),
         _ => format!("{:.1} MB", bytes as f64 / MB as f64),
     }
+}
+
+fn system(ctx: &Context, action: SystemAction) -> Result<()> {
+    let (method, params) = match action {
+        SystemAction::Info => ("system.hardware", json!({})),
+        SystemAction::Firmware { refresh } => ("system.firmware", json!({ "refresh": refresh })),
+    };
+    if ctx.dry_run {
+        println!("epochoxide api {method} --params '{params}'");
+        return Ok(());
+    }
+    let mut client = ctx.oxide()?;
+    // Asking fwupd again talks to its daemon and can take a few seconds.
+    if matches!(action, SystemAction::Firmware { refresh: true }) {
+        client.set_read_timeout(None)?;
+    }
+    let data = client.api(method, params)?;
+
+    ctx.format.emit(&data, || match action {
+        SystemAction::Info => print_hardware(&data),
+        SystemAction::Firmware { .. } => print_firmware(&data),
+    });
+    Ok(())
+}
+
+fn print_hardware(data: &Value) {
+    let text = |value: &Value, key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let model = [text(data, "vendor"), text(data, "product")]
+        .into_iter()
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ");
+    println!("{} {model}", pad("machine", 11));
+    let family = text(data, "family");
+    if !family.is_empty() {
+        println!("{} {family}", pad("family", 11));
+    }
+    let bios = text(data, "bios_version");
+    if !bios.is_empty() {
+        println!("{} {bios}", pad("bios", 11));
+    }
+
+    let Some(battery) = data.get("battery").filter(|value| !value.is_null()) else {
+        println!("{} none", pad("battery", 11));
+        return;
+    };
+    let number = |key: &str| battery.get(key).and_then(Value::as_u64);
+    let name = [
+        text(battery, "name"),
+        text(battery, "manufacturer"),
+        text(battery, "model"),
+    ]
+    .into_iter()
+    .filter(|part| !part.is_empty())
+    .collect::<Vec<_>>()
+    .join(" ");
+    println!("{} {name}", pad("battery", 11));
+    // Health is the number nobody's desktop shows and everybody wants.
+    if let Some(health) = number("health") {
+        let wear = match (number("full"), number("design_full")) {
+            (Some(full), Some(design)) => {
+                format!("  ({full}/{design} {})", text(battery, "unit"))
+            }
+            _ => String::new(),
+        };
+        println!("{} {health}%{wear}", pad("health", 11));
+    }
+    if let Some(cycles) = number("cycle_count") {
+        println!("{} {cycles}", pad("cycles", 11));
+    }
+    if let Some(capacity) = number("capacity") {
+        println!(
+            "{} {capacity}%  {}",
+            pad("charge", 11),
+            text(battery, "status").to_lowercase()
+        );
+    }
+    match (
+        number("charge_start_threshold"),
+        number("charge_end_threshold"),
+    ) {
+        (Some(start), Some(end)) => println!("{} {start}-{end}%", pad("limits", 11)),
+        (None, Some(end)) => println!("{} up to {end}%", pad("limits", 11)),
+        _ => {}
+    }
+}
+
+fn print_firmware(data: &Value) {
+    if data.get("available").and_then(Value::as_bool) != Some(true) {
+        println!(
+            "{}",
+            data.get("reason")
+                .and_then(Value::as_str)
+                .unwrap_or("firmware updates are unavailable")
+        );
+        return;
+    }
+    let empty = Vec::new();
+    let updates = data
+        .get("updates")
+        .and_then(Value::as_array)
+        .unwrap_or(&empty);
+    if updates.is_empty() {
+        println!("firmware is up to date");
+        return;
+    }
+    for update in updates {
+        let field = |key: &str| update.get(key).and_then(Value::as_str).unwrap_or("");
+        println!(
+            "{} {} -> {}",
+            pad(field("name"), 22),
+            field("current"),
+            field("available")
+        );
+    }
+    println!();
+    println!("Install with `fwupdmgr update`; EpochShell does not flash firmware for you.");
 }
 
 fn toggle(ctx: &Context, action: ToggleAction) -> Result<()> {

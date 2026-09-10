@@ -209,6 +209,35 @@ Read-only: switching goes through whatever daemon is managing the CPU.
 Read from sysfs, so it needs no daemon and no root. It reports what is happening rather than
 offering to change it -- see EpochOxide's README for why switching is a separate problem.
 
+### System
+
+```bash
+epochctl system info
+epochctl system firmware
+epochctl toggle stay-awake            # omit on/off to flip it
+```
+
+```console
+$ epochctl system info
+machine     Framework Laptop (12th Gen Intel Core)
+family      13in Laptop
+bios        03.20
+battery     BAT1 NVT FRANGWA
+health      94%  (3695000/3915000 µAh)
+cycles      44
+charge      80%  not charging
+
+$ epochctl system firmware
+UEFI CA                2011 -> 2023
+UEFI dbx               20230501 -> 20260402
+
+Install with `fwupdmgr update`; EpochShell does not flash firmware for you.
+```
+
+`system info` works on any laptop; the Framework detection only changes how the machine is named.
+Charge limits appear when sysfs exposes them -- Framework keeps them in the EC behind a root-only
+device, so they are absent there rather than prompting for a password to read a number.
+
 ### Nix
 
 ```bash
