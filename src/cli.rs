@@ -85,6 +85,16 @@ pub enum Command {
         #[command(subcommand)]
         action: CaptureAction,
     },
+    /// Flip a shell-wide toggle
+    Toggle {
+        #[command(subcommand)]
+        action: ToggleAction,
+    },
+    /// Show what the CPU is doing about power
+    Power {
+        #[command(subcommand)]
+        action: PowerAction,
+    },
     /// Flake update status, updates, and rebuilds
     Nix {
         #[command(subcommand)]
@@ -320,6 +330,26 @@ pub struct RecordArgs {
     /// Do not show a notification when the recording finishes
     #[arg(long)]
     pub no_notify: bool,
+}
+
+#[derive(Subcommand)]
+pub enum ToggleAction {
+    /// Hold the machine out of idle and sleep
+    StayAwake {
+        /// Turn it on or off explicitly; omit to flip whatever it is now
+        #[arg(value_parser = ["on", "off"])]
+        state: Option<String>,
+
+        /// Why, as it appears in `systemd-inhibit --list`
+        #[arg(long, value_name = "TEXT")]
+        reason: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum PowerAction {
+    /// Show the current power profile and the knobs behind it
+    Profile,
 }
 
 #[derive(Subcommand)]

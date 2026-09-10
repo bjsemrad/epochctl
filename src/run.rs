@@ -86,6 +86,8 @@ pub fn dispatch(ctx: &Context, command: Command) -> Result<()> {
         Command::Ping => shell(ctx, ShellAction::Ping),
         Command::Reload { hard } => shell(ctx, ShellAction::Reload { hard }),
         Command::Capture { action } => capture(ctx, action),
+        Command::Toggle { action } => toggle(ctx, action),
+        Command::Power { action } => power(ctx, action),
         Command::Nix { action } => nix(ctx, action),
         Command::Search(args) => search(ctx, args),
         Command::Activate(args) => activate(ctx, args),
@@ -605,6 +607,97 @@ fn human_bytes(bytes: u64) -> String {
         KB..MB => format!("{:.0} KB", bytes as f64 / KB as f64),
         _ => format!("{:.1} MB", bytes as f64 / MB as f64),
     }
+}
+
+fn toggle(ctx: &Context, action: ToggleAction) -> Result<()> {
+    let ToggleAction::StayAwake { state, reason } = action;
+    let mut params = json!({});
+    let object = params.as_object_mut().expect("params is an object");
+    // Omitting `enabled` is what asks the backend to flip whatever it currently is, which is what
+    // a keybinding wants; naming a state is for scripts that need it definitely on or off.
+    if let Some(state) = &state {
+        object.insert("enabled".into(), json!(state == "on"));
+    }
+    if let Some(reason) = &reason {
+        object.insert("reason".into(), json!(reason));
+    }
+
+    if ctx.dry_run {
+        println!("epochoxide api system.setStayAwake --params '{params}'");
+        return Ok(());
+    }
+
+    let data = ctx.oxide()?.api("system.setStayAwake", params)?;
+    ctx.format.emit(&data, || {
+        let enabled = data
+            .get("enabled")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !enabled {
+            println!("stay-awake off");
+            return;
+        }
+        let reason = data.get("reason").and_then(Value::as_str).unwrap_or("");
+        println!("stay-awake on ({reason})");
+    });
+    Ok(())
+}
+
+fn power(ctx: &Context, action: PowerAction) -> Result<()> {
+    let PowerAction::Profile = action;
+    if ctx.dry_run {
+        println!("epochoxide api system.power");
+        return Ok(());
+    }
+    let data = ctx.oxide()?.api("system.power", json!({}))?;
+    ctx.format.emit(&data, || {
+        let text = |key: &str| data.get(key).and_then(Value::as_str).unwrap_or_default();
+        if data.get("available").and_then(Value::as_bool) != Some(true) {
+            println!("{}", text("reason"));
+            return;
+        }
+        let profile = text("profile");
+        println!(
+            "{} {}",
+            pad("profile", 12),
+            if profile.is_empty() {
+                "unknown".to_string()
+            } else {
+                profile.to_string()
+            }
+        );
+        println!("{} {}", pad("governor", 12), text("governor"));
+        let preference = text("energy_preference");
+        if !preference.is_empty() {
+            println!("{} {preference}", pad("energy", 12));
+        }
+        match data.get("turbo").and_then(Value::as_bool) {
+            Some(on) => println!("{} {}", pad("turbo", 12), if on { "on" } else { "off" }),
+            // A machine with no turbo knob is not a machine with turbo off.
+            None => {}
+        }
+        println!("{} {}", pad("driver", 12), text("driver"));
+        let manager = text("manager");
+        println!(
+            "{} {}",
+            pad("managed by", 12),
+            if manager.is_empty() {
+                "nothing"
+            } else {
+                manager
+            }
+        );
+        if let Some(platform) = data.get("platform_profile").and_then(Value::as_str) {
+            println!("{} {platform}", pad("platform", 12));
+        }
+        // Switching is a separate problem: whatever is managing the CPU would put its own decision
+        // back seconds later unless asked through its own override.
+        if data.get("can_switch").and_then(Value::as_bool) != Some(true) {
+            println!();
+            println!("Read-only: switching goes through whatever daemon is managing the CPU.");
+        }
+    });
+    Ok(())
 }
 
 fn nix(ctx: &Context, action: NixAction) -> Result<()> {

@@ -189,6 +189,26 @@ in the bar drawer, for the times a menu is easier than remembering which key doe
 are actually installed. Window capture also needs a compositor that reports where its windows are;
 `status` says whether this one does.
 
+### Power
+
+```bash
+epochctl power profile
+```
+
+```console
+profile      performance
+governor     performance
+energy       performance
+turbo        off
+driver       intel_pstate
+managed by   auto-cpufreq
+
+Read-only: switching goes through whatever daemon is managing the CPU.
+```
+
+Read from sysfs, so it needs no daemon and no root. It reports what is happening rather than
+offering to change it -- see EpochOxide's README for why switching is a separate problem.
+
 ### Nix
 
 ```bash
