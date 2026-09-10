@@ -131,6 +131,10 @@ fn launcher(ctx: &Context, action: LauncherAction) -> Result<()> {
             let reply = ctx.call("launcher", "close", &[])?;
             report_action(ctx, reply, "launcher closed");
         }
+        LauncherAction::Providers => {
+            let reply = ctx.call("launcher", "providers", &[])?;
+            report_action(ctx, reply, "launcher opened on its provider list");
+        }
         LauncherAction::Provider { name } => {
             let reply = ctx.call("launcher", "openProvider", &[&name])?;
             report_action(ctx, reply, &format!("launcher opened on {name}"));

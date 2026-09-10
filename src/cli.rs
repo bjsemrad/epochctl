@@ -133,6 +133,8 @@ pub enum LauncherAction {
     Open,
     /// Close the launcher
     Close,
+    /// Open the launcher on its provider list -- every provider, including menus
+    Providers,
     /// Open the launcher scoped to one provider
     Provider {
         /// Provider name, for example files, clipboard, windows, keybinds
