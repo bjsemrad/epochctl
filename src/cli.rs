@@ -353,6 +353,16 @@ pub enum SystemAction {
 
 #[derive(Subcommand)]
 pub enum ToggleAction {
+    /// Warm the screen
+    NightLight {
+        /// Turn it on or off explicitly; omit to flip whatever it is now
+        #[arg(value_parser = ["on", "off"])]
+        state: Option<String>,
+
+        /// Colour temperature in kelvin; lower is warmer
+        #[arg(long, short = 't', value_name = "KELVIN")]
+        temperature: Option<u32>,
+    },
     /// Hold the machine out of idle and sleep
     StayAwake {
         /// Turn it on or off explicitly; omit to flip whatever it is now

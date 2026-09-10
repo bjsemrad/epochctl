@@ -215,6 +215,8 @@ offering to change it -- see EpochOxide's README for why switching is a separate
 epochctl system info
 epochctl system firmware
 epochctl toggle stay-awake            # omit on/off to flip it
+epochctl toggle night-light           # warm the screen
+epochctl toggle night-light on -t 3000
 ```
 
 ```console

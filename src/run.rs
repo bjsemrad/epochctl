@@ -738,7 +738,12 @@ fn print_firmware(data: &Value) {
 }
 
 fn toggle(ctx: &Context, action: ToggleAction) -> Result<()> {
-    let ToggleAction::StayAwake { state, reason } = action;
+    if let ToggleAction::NightLight { state, temperature } = &action {
+        return night_light(ctx, state.as_deref(), *temperature);
+    }
+    let ToggleAction::StayAwake { state, reason } = action else {
+        unreachable!("night light is handled above")
+    };
     let mut params = json!({});
     let object = params.as_object_mut().expect("params is an object");
     // Omitting `enabled` is what asks the backend to flip whatever it currently is, which is what
@@ -767,6 +772,35 @@ fn toggle(ctx: &Context, action: ToggleAction) -> Result<()> {
         }
         let reason = data.get("reason").and_then(Value::as_str).unwrap_or("");
         println!("stay-awake on ({reason})");
+    });
+    Ok(())
+}
+
+fn night_light(ctx: &Context, state: Option<&str>, temperature: Option<u32>) -> Result<()> {
+    let mut params = json!({});
+    let object = params.as_object_mut().expect("params is an object");
+    // Omitting `enabled` is what asks the backend to flip whatever it currently is.
+    if let Some(state) = state {
+        object.insert("enabled".into(), json!(state == "on"));
+    }
+    if let Some(temperature) = temperature {
+        object.insert("temperature".into(), json!(temperature));
+    }
+
+    if ctx.dry_run {
+        println!("epochoxide api system.setNightLight --params '{params}'");
+        return Ok(());
+    }
+
+    let data = ctx.oxide()?.api("system.setNightLight", params)?;
+    ctx.format.emit(&data, || {
+        if data.get("enabled").and_then(Value::as_bool) != Some(true) {
+            println!("night mode off");
+            return;
+        }
+        let kelvin = data.get("temperature").and_then(Value::as_u64).unwrap_or(0);
+        let tool = data.get("tool").and_then(Value::as_str).unwrap_or("");
+        println!("night mode on at {kelvin}K ({tool})");
     });
     Ok(())
 }
