@@ -72,6 +72,11 @@ pub enum Command {
         #[command(subcommand)]
         action: ShellAction,
     },
+    /// Show, list, and switch the shell palette
+    Theme {
+        #[command(subcommand)]
+        action: ThemeAction,
+    },
     /// Check that the shell is responding (alias for `shell ping`)
     Ping,
     /// Reload the shell configuration (alias for `shell reload`)
@@ -161,6 +166,21 @@ pub enum PanelAction {
     List,
     /// Close every open panel
     CloseAll,
+}
+
+#[derive(Subcommand)]
+pub enum ThemeAction {
+    /// Report the theme in force and where it came from
+    Get,
+    /// List every theme that can be selected
+    List,
+    /// Switch to a theme, and keep it across restarts
+    Set {
+        /// Theme name, as listed by `epochctl theme list`
+        name: String,
+    },
+    /// Forget the selection and go back to the configured default
+    Reset,
 }
 
 #[derive(Subcommand)]

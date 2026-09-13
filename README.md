@@ -92,6 +92,22 @@ epochctl shell targets
 `reload` is soft by default. A hard reload tears down and rebuilds the whole QML engine, which
 drops the notification daemon and polkit agent registrations with it.
 
+### Theme
+
+```bash
+epochctl theme list                   # every theme that can be selected, and which is current
+epochctl theme get                    # what is in force, and the file it came from
+epochctl theme set light              # switch, and keep it across restarts
+epochctl theme reset                  # forget the pick, back to the configured default
+```
+
+`set` is refused for a name that matches no theme, rather than applied and then silently undone --
+an unknown name would otherwise drop the shell to its built-in defaults. The switch is written to
+`~/.local/state/epochshell/theme`, which the shell watches, so every running instance follows.
+
+`get` reports `file not found` when the selected theme names a file that is not there; the shell is
+then wearing its built-in defaults under a name that promised something else.
+
 ### Backend
 
 ```bash

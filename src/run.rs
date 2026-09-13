@@ -83,6 +83,7 @@ pub fn dispatch(ctx: &Context, command: Command) -> Result<()> {
         Command::Launcher { action } => launcher(ctx, action),
         Command::Panel { action } => panel(ctx, action),
         Command::Shell { action } => shell(ctx, action),
+        Command::Theme { action } => theme(ctx, action),
         Command::Ping => shell(ctx, ShellAction::Ping),
         Command::Reload { hard } => shell(ctx, ShellAction::Reload { hard }),
         Command::Capture { action } => capture(ctx, action),
@@ -214,6 +215,78 @@ fn panel(ctx: &Context, action: PanelAction) -> Result<()> {
                     println!("{} {}", pad(name, 16), if open { "open" } else { "closed" });
                 }
             });
+        }
+    }
+    Ok(())
+}
+
+/// The shell palette.
+///
+/// Themes are files the shell reads, and which one is worn is a line in a state file it watches,
+/// so `set` is not a request the shell can refuse for long: it writes the pick and the shell
+/// follows. It *is* refused when the name matches no theme, because applying an unknown name
+/// would silently drop the shell to its built-in defaults.
+fn theme(ctx: &Context, action: ThemeAction) -> Result<()> {
+    match action {
+        ThemeAction::Get => {
+            let reply = ctx.call("theme", "get", &[])?;
+            let Some(reply) = reply else { return Ok(()) };
+            let value = reply.as_value();
+            ctx.format.emit(&value, || {
+                let name = value.get("theme").and_then(Value::as_str).unwrap_or("");
+                let loaded = value
+                    .get("loaded")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                println!("{} {}", pad("theme", 12), name);
+                println!(
+                    "{} {}",
+                    pad("source", 12),
+                    value.get("path").and_then(Value::as_str).unwrap_or("")
+                );
+                // Worth saying plainly: the name took, the file did not, and what is on screen
+                // is neither the old theme nor the new one.
+                if !loaded {
+                    println!("{} file not found -- built-in defaults are in use", pad("state", 12));
+                }
+            });
+        }
+        ThemeAction::List => {
+            let reply = ctx.call("theme", "list", &[])?;
+            let Some(reply) = reply else { return Ok(()) };
+            let value = reply.as_value();
+            ctx.format.emit(&value, || {
+                let empty = Vec::new();
+                let themes = value
+                    .get("themes")
+                    .and_then(Value::as_array)
+                    .unwrap_or(&empty);
+                if themes.is_empty() {
+                    println!("no themes found");
+                    return;
+                }
+                let current = value.get("current").and_then(Value::as_str).unwrap_or("");
+                for entry in themes {
+                    let name = entry.as_str().unwrap_or("");
+                    println!("{} {}", pad(name, 16), if name == current { "current" } else { "" });
+                }
+            });
+        }
+        ThemeAction::Set { name } => {
+            let reply = ctx.call("theme", "set", &[&name])?;
+            report_action(ctx, reply, &format!("theme set to {name}"));
+        }
+        ThemeAction::Reset => {
+            let reply = ctx.call("theme", "reset", &[])?;
+            let human = match reply
+                .as_ref()
+                .and_then(|r| r.field("theme"))
+                .and_then(Value::as_str)
+            {
+                Some(name) => format!("theme reset to {name}"),
+                None => "theme reset".to_string(),
+            };
+            report_action(ctx, reply, &human);
         }
     }
     Ok(())
