@@ -84,6 +84,7 @@ pub fn dispatch(ctx: &Context, command: Command) -> Result<()> {
         Command::Panel { action } => panel(ctx, action),
         Command::Shell { action } => shell(ctx, action),
         Command::Theme { action } => theme(ctx, action),
+        Command::Wallpaper { action } => wallpaper(ctx, action),
         Command::Ping => shell(ctx, ShellAction::Ping),
         Command::Reload { hard } => shell(ctx, ShellAction::Reload { hard }),
         Command::Capture { action } => capture(ctx, action),
@@ -218,6 +219,86 @@ fn panel(ctx: &Context, action: PanelAction) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// The desktop wallpaper.
+///
+/// Goes to EpochOxide, not the shell: the wallpaper is system state, so it has to be settable and
+/// answerable with the shell closed, the way night mode and stay-awake are. The daemon also has to
+/// own it because the choice has to be put back at session start, before anything has drawn.
+fn wallpaper(ctx: &Context, action: WallpaperAction) -> Result<()> {
+    match action {
+        // The picker is a window, so these three are the shell's business rather than the
+        // daemon's; everything that changes state below goes to EpochOxide.
+        WallpaperAction::Open => {
+            let reply = ctx.call("wallpaper", "open", &[])?;
+            report_action(ctx, reply, "wallpaper picker opened");
+        }
+        WallpaperAction::Close => {
+            let reply = ctx.call("wallpaper", "close", &[])?;
+            report_action(ctx, reply, "wallpaper picker closed");
+        }
+        WallpaperAction::Toggle => {
+            let reply = ctx.call("wallpaper", "toggle", &[])?;
+            let human = match reply.as_ref().and_then(|r| r.bool_field("open")) {
+                Some(true) => "wallpaper picker opened".to_string(),
+                Some(false) => "wallpaper picker closed".to_string(),
+                None => "wallpaper picker toggled".to_string(),
+            };
+            report_action(ctx, reply, &human);
+        }
+        WallpaperAction::List => {
+            let value = ctx.oxide()?.api("wallpaper.status", json!({}))?;
+            ctx.format.emit(&value, || {
+                let empty = Vec::new();
+                let items = value
+                    .get("wallpapers")
+                    .and_then(Value::as_array)
+                    .unwrap_or(&empty);
+                if items.is_empty() {
+                    let dirs = value
+                        .get("directories")
+                        .and_then(Value::as_array)
+                        .unwrap_or(&empty);
+                    println!("no images found in:");
+                    for d in dirs {
+                        println!("  {}", d.as_str().unwrap_or(""));
+                    }
+                    return;
+                }
+                let current = value.get("current").and_then(Value::as_str).unwrap_or("");
+                for entry in items {
+                    let path = entry.as_str().unwrap_or("");
+                    println!("{} {}", if path == current { "*" } else { " " }, path);
+                }
+            });
+        }
+        WallpaperAction::Set { path } => {
+            let data = ctx.oxide()?.api("wallpaper.set", json!({ "path": path }))?;
+            report_wallpaper(ctx, &data);
+        }
+        WallpaperAction::Next => {
+            let data = ctx.oxide()?.api("wallpaper.next", json!({ "step": 1 }))?;
+            report_wallpaper(ctx, &data);
+        }
+        WallpaperAction::Previous => {
+            let data = ctx.oxide()?.api("wallpaper.next", json!({ "step": -1 }))?;
+            report_wallpaper(ctx, &data);
+        }
+    }
+    Ok(())
+}
+
+/// Print whichever wallpaper the daemon ended up on.
+fn report_wallpaper(ctx: &Context, data: &Value) {
+    ctx.format.emit(data, || {
+        let current = data.get("current").and_then(Value::as_str).unwrap_or("");
+        if current.is_empty() {
+            println!("wallpaper changed");
+        } else {
+            println!("{current}");
+        }
+    });
 }
 
 /// The shell palette.

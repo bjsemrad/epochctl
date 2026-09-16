@@ -77,6 +77,11 @@ pub enum Command {
         #[command(subcommand)]
         action: ThemeAction,
     },
+    /// List and switch the desktop wallpaper
+    Wallpaper {
+        #[command(subcommand)]
+        action: WallpaperAction,
+    },
     /// Check that the shell is responding (alias for `shell ping`)
     Ping,
     /// Reload the shell configuration (alias for `shell reload`)
@@ -166,6 +171,27 @@ pub enum PanelAction {
     List,
     /// Close every open panel
     CloseAll,
+}
+
+#[derive(Subcommand)]
+pub enum WallpaperAction {
+    /// Open the wallpaper picker overlay
+    Open,
+    /// Close the picker, putting back what was showing
+    Close,
+    /// Toggle the picker
+    Toggle,
+    /// List every image found, and which is current
+    List,
+    /// Switch to a wallpaper by path
+    Set {
+        /// Path to an image, as listed by `epochctl wallpaper list`
+        path: String,
+    },
+    /// Switch to the next wallpaper without opening anything
+    Next,
+    /// Switch to the previous one
+    Previous,
 }
 
 #[derive(Subcommand)]
