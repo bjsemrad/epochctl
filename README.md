@@ -407,9 +407,13 @@ cargo test
 With Nix:
 
 ```bash
+nix develop          # cargo, rustc, clippy, rustfmt, and quickshell on PATH
 nix build .#epochctl
 nix run .#epochctl -- doctor
 ```
+
+The dev shell carries Quickshell because `epochctl` shells out to `qs` for shell IPC: without it
+every command that talks to a running shell fails in a way that looks like the shell being down.
 
 ## Installing
 
