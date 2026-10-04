@@ -108,6 +108,15 @@ an unknown name would otherwise drop the shell to its built-in defaults. The swi
 `get` reports `file not found` when the selected theme names a file that is not there; the shell is
 then wearing its built-in defaults under a name that promised something else.
 
+### Lock
+
+```bash
+epochctl lock              # lock, and wait until the compositor confirms
+epochctl lock --no-wait    # just ask
+```
+
+There is no unlock: that takes a password or a fingerprint at the lock screen itself.
+
 ### Wallpaper
 
 ```bash

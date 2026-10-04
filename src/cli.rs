@@ -82,6 +82,15 @@ pub enum Command {
         #[command(subcommand)]
         action: WallpaperAction,
     },
+    /// Lock the session with the shell's lock screen
+    ///
+    /// Waits until the compositor confirms every screen is covered, so it is safe to run right
+    /// before suspending. Unlocking takes a password or fingerprint; there is no unlock command.
+    Lock {
+        /// Return as soon as the lock is requested instead of waiting for the compositor
+        #[arg(long)]
+        no_wait: bool,
+    },
     /// Check that the shell is responding (alias for `shell ping`)
     Ping,
     /// Reload the shell configuration (alias for `shell reload`)

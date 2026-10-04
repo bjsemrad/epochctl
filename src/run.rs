@@ -85,6 +85,7 @@ pub fn dispatch(ctx: &Context, command: Command) -> Result<()> {
         Command::Shell { action } => shell(ctx, action),
         Command::Theme { action } => theme(ctx, action),
         Command::Wallpaper { action } => wallpaper(ctx, action),
+        Command::Lock { no_wait } => lock(ctx, no_wait),
         Command::Ping => shell(ctx, ShellAction::Ping),
         Command::Reload { hard } => shell(ctx, ShellAction::Reload { hard }),
         Command::Capture { action } => capture(ctx, action),
@@ -370,6 +371,35 @@ fn theme(ctx: &Context, action: ThemeAction) -> Result<()> {
             report_action(ctx, reply, &human);
         }
     }
+    Ok(())
+}
+
+/// How long `lock` waits for the compositor to confirm. A lock that is not secure by then is
+/// reported rather than waited on forever: a keybinding should not hang.
+const LOCK_CONFIRM_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// Lock the session, and by default wait until the compositor says every screen is covered.
+///
+/// The wait is the point. Run from a before-sleep hook, a lock that returned at once would let the
+/// machine suspend with the desktop still on screen, to be shown again on resume until the lock
+/// surface caught up.
+fn lock(ctx: &Context, no_wait: bool) -> Result<()> {
+    let reply = ctx.call("lock", "lock", &[])?;
+    let Some(mut reply) = reply else { return Ok(()) };
+    if !no_wait {
+        let started = std::time::Instant::now();
+        while reply.bool_field("secure") != Some(true) && started.elapsed() < LOCK_CONFIRM_TIMEOUT {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            reply = ctx.call("lock", "status", &[])?.unwrap_or(reply);
+        }
+    }
+    let human = match (reply.bool_field("locked"), reply.bool_field("secure")) {
+        (_, Some(true)) => "locked",
+        (Some(true), _) if no_wait => "lock requested",
+        (Some(true), _) => "lock requested, but the compositor has not confirmed it",
+        _ => "the shell did not lock",
+    };
+    report_action(ctx, Some(reply), human);
     Ok(())
 }
 
