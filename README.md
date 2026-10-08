@@ -69,7 +69,7 @@ epochctl panel close-all
 
 Panel names come from the shell itself, so `panel list` is always authoritative. With the current
 shell that is `audio`, `battery`, `bluetooth`, `calendar`, `capture`, `ethernet`, `homeassistant`,
-`localsend`, `media`, `nix`, `notifications`, `record`, `system`, `tailscale`, `weather`, and
+`localsend`, `media`, `nix`, `notifications`, `record`, `system`, `tailscale`, and
 `wifi`. Asking for one that does not exist
 lists the ones that do:
 
