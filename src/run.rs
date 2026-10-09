@@ -358,6 +358,23 @@ fn theme(ctx: &Context, action: ThemeAction) -> Result<()> {
             let reply = ctx.call("theme", "set", &[&name])?;
             report_action(ctx, reply, &format!("theme set to {name}"));
         }
+        ThemeAction::Open => {
+            let reply = ctx.call("theme", "open", &[])?;
+            report_action(ctx, reply, "theme switcher opened");
+        }
+        ThemeAction::Close => {
+            let reply = ctx.call("theme", "close", &[])?;
+            report_action(ctx, reply, "theme switcher closed");
+        }
+        ThemeAction::Toggle => {
+            let reply = ctx.call("theme", "toggle", &[])?;
+            let human = match reply.as_ref().and_then(|r| r.bool_field("open")) {
+                Some(true) => "theme switcher opened".to_string(),
+                Some(false) => "theme switcher closed".to_string(),
+                None => "theme switcher toggled".to_string(),
+            };
+            report_action(ctx, reply, &human);
+        }
         ThemeAction::Reset => {
             let reply = ctx.call("theme", "reset", &[])?;
             let human = match reply
@@ -502,6 +519,12 @@ fn screenshot(ctx: &Context, args: ScreenshotArgs) -> Result<()> {
             object.insert(key.into(), json!(false));
         }
     }
+    // Both ways round, and only when asked: left out, the backend's screenshot_annotate decides.
+    if args.annotate {
+        object.insert("annotate".into(), json!(true));
+    } else if args.no_annotate {
+        object.insert("annotate".into(), json!(false));
+    }
 
     if ctx.dry_run {
         println!("epochoxide api capture.screenshot --params '{params}'");
@@ -528,6 +551,13 @@ fn screenshot(ctx: &Context, args: ScreenshotArgs) -> Result<()> {
                 println!("{} {value}", pad(label, 10));
             }
         };
+        // In the editor, nothing has been kept yet: satty copies and saves when the user is done.
+        if flag("annotating") {
+            show("mode", text("mode"));
+            show("region", text("geometry"));
+            println!("{} opened in satty", pad("editor", 10));
+            return;
+        }
         show("mode", text("mode"));
         show("window", text("window"));
         show("monitor", text("output"));

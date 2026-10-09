@@ -99,6 +99,7 @@ epochctl theme list                   # every theme that can be selected, and wh
 epochctl theme get                    # what is in force, and the file it came from
 epochctl theme set light              # switch, and keep it across restarts
 epochctl theme reset                  # forget the pick, back to the configured default
+epochctl theme toggle                 # the full-screen switcher (also open / close)
 ```
 
 `set` is refused for a name that matches no theme, rather than applied and then silently undone --
@@ -155,6 +156,7 @@ epochctl capture screenshot window --select      # click the window to capture
 epochctl capture screenshot fullscreen           # the focused monitor
 epochctl capture screenshot fullscreen -o DP-3   # a named monitor
 epochctl capture screenshot all                  # every monitor, as one image
+epochctl capture screenshot --annotate           # a region, opened in satty to mark up first
 epochctl capture status
 ```
 
@@ -176,6 +178,8 @@ the shell, which shows the image itself in the notification. Each of those is a 
 | `--no-copy` | Leave the clipboard alone |
 | `--no-save` | Copy the shot and leave the file in the cache |
 | `--no-notify` | Take it quietly |
+| `--annotate` | Open the shot in satty; copying and saving happen from there |
+| `--no-annotate` | Keep it as taken, even when annotating is the configured default |
 | `--dir <DIR>` | Save this one somewhere else |
 | `--cursor` | Include the mouse pointer (screenshots only) |
 | `--delay`, `-d` | Wait N seconds after any selection is made |

@@ -216,6 +216,12 @@ pub enum ThemeAction {
     },
     /// Forget the selection and go back to the configured default
     Reset,
+    /// Open the theme switcher
+    Open,
+    /// Close the theme switcher, putting back the theme that was on
+    Close,
+    /// Open the theme switcher, or close it if it is already open
+    Toggle,
 }
 
 #[derive(Subcommand)]
@@ -307,6 +313,14 @@ pub struct ScreenshotArgs {
     /// Do not show a notification
     #[arg(long)]
     pub no_notify: bool,
+
+    /// Open the shot in satty to annotate it; copying and saving then happen from there
+    #[arg(long, conflicts_with = "no_annotate")]
+    pub annotate: bool,
+
+    /// Do not annotate, even when annotating is the configured default
+    #[arg(long)]
+    pub no_annotate: bool,
 }
 
 #[derive(Args)]
