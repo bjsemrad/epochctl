@@ -100,6 +100,7 @@ epochctl theme get                    # what is in force, and the file it came f
 epochctl theme set light              # switch, and keep it across restarts
 epochctl theme reset                  # forget the pick, back to the configured default
 epochctl theme toggle                 # the full-screen switcher (also open / close)
+epochctl settings toggle              # bar, panel and workspace styles (also open / close)
 ```
 
 `set` is refused for a name that matches no theme, rather than applied and then silently undone --

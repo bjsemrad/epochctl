@@ -84,6 +84,7 @@ pub fn dispatch(ctx: &Context, command: Command) -> Result<()> {
         Command::Panel { action } => panel(ctx, action),
         Command::Shell { action } => shell(ctx, action),
         Command::Theme { action } => theme(ctx, action),
+        Command::Settings { action } => settings(ctx, action),
         Command::Wallpaper { action } => wallpaper(ctx, action),
         Command::Lock { no_wait } => lock(ctx, no_wait),
         Command::Ping => shell(ctx, ShellAction::Ping),
@@ -300,6 +301,31 @@ fn report_wallpaper(ctx: &Context, data: &Value) {
             println!("{current}");
         }
     });
+}
+
+/// The appearance settings window. Everything in it is saved by the shell as it is chosen, so
+/// there is only opening and closing it here.
+fn settings(ctx: &Context, action: SettingsAction) -> Result<()> {
+    match action {
+        SettingsAction::Open => {
+            let reply = ctx.call("settings", "open", &[])?;
+            report_action(ctx, reply, "settings opened");
+        }
+        SettingsAction::Close => {
+            let reply = ctx.call("settings", "close", &[])?;
+            report_action(ctx, reply, "settings closed");
+        }
+        SettingsAction::Toggle => {
+            let reply = ctx.call("settings", "toggle", &[])?;
+            let human = match reply.as_ref().and_then(|r| r.bool_field("open")) {
+                Some(true) => "settings opened".to_string(),
+                Some(false) => "settings closed".to_string(),
+                None => "settings toggled".to_string(),
+            };
+            report_action(ctx, reply, &human);
+        }
+    }
+    Ok(())
 }
 
 /// The shell palette.

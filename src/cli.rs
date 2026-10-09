@@ -77,6 +77,11 @@ pub enum Command {
         #[command(subcommand)]
         action: ThemeAction,
     },
+    /// Open the appearance settings window: bar, panels and workspaces
+    Settings {
+        #[command(subcommand)]
+        action: SettingsAction,
+    },
     /// List and switch the desktop wallpaper
     Wallpaper {
         #[command(subcommand)]
@@ -201,6 +206,16 @@ pub enum WallpaperAction {
     Next,
     /// Switch to the previous one
     Previous,
+}
+
+#[derive(Subcommand)]
+pub enum SettingsAction {
+    /// Open the appearance settings window
+    Open,
+    /// Close it
+    Close,
+    /// Open it, or close it if it is already open
+    Toggle,
 }
 
 #[derive(Subcommand)]
